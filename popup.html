@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DTU Course Auto-Register</title>
+  <style>
+    body { font-family: Arial, sans-serif; width: 300px; }
+    label, input, select, button { display: block; margin: 8px 0; width: 100%; }
+  </style>
+</head>
+<body>
+  <button id="fetchBtn">Fetch Courses</button>
+  <div id="coursesSection" style="display:none;">
+    <h3>Select Course</h3>
+    <select id="courseSelect"></select>
+    <button id="startBtn">Start Monitoring</button>
+    <button id="stopBtn">Stop Monitoring</button>
+  </div>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html> 

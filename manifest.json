@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "DTU Course Auto-Register",
+  "version": "1.0",
+  "description": "Automatically registers for a course when a seat is available.",
+  "permissions": [
+    "scripting",
+    "storage",
+    "notifications",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://reg.exam.dtu.ac.in/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://reg.exam.dtu.ac.in/student/courseRegistration/*"],
+      "js": ["content.js"]
+    }
+  ]
+} 
