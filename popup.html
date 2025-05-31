@@ -5,6 +5,8 @@
   <style>
     body { font-family: Arial, sans-serif; width: 300px; }
     label, input, select, button { display: block; margin: 8px 0; width: 100%; }
+    #intervalCount { font-weight: bold; color: #007bff; }
+    #notice { color: #b00; font-size: 12px; margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -12,10 +14,13 @@
   <div id="coursesSection" style="display:none;">
     <h3>Select Course</h3>
     <select id="courseSelect"></select>
+    <label>Interval (seconds): <input id="intervalInput" type="number" min="0.5" step="0.1" value="5"></label>
     <button id="startBtn">Start Monitoring</button>
     <button id="stopBtn">Stop Monitoring</button>
+    <div>Interval runs: <span id="intervalCount">0</span></div>
   </div>
   <div id="status"></div>
+  <div id="notice">Please use the Stop Monitoring button before closing this popup.</div>
   <script src="popup.js"></script>
 </body>
 </html> 

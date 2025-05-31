@@ -1,11 +1,14 @@
 let intervalId = null;
+let intervalCount = 0;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "startMonitoring") {
     if (intervalId) clearInterval(intervalId);
-    chrome.storage.local.set({ monitoring: true });
-    chrome.storage.local.get(['courseId'], function(result) {
+    chrome.storage.local.set({ monitoring: true, intervalCount: 0 });
+    chrome.storage.local.get(['courseId', 'intervalTime'], function(result) {
       const courseId = result.courseId;
+      const intervalTime = (msg.intervalTime || result.intervalTime || 5) * 1000;
+      intervalCount = 0;
       intervalId = setInterval(() => {
         chrome.storage.local.get(['monitoring'], function(res) {
           if (!res.monitoring) {
@@ -14,6 +17,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             console.log("Monitoring stopped by flag.");
             return;
           }
+          intervalCount++;
+          chrome.storage.local.set({ intervalCount });
           chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
             if (!tabs || tabs.length === 0) {
               console.error("No active tab found.");
@@ -46,11 +51,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             );
           });
         });
-      }, 5000);
+      }, intervalTime);
     });
   }
   if (msg.action === "stopMonitoring") {
-    chrome.storage.local.set({ monitoring: false });
+    chrome.storage.local.set({ monitoring: false, intervalCount: 0 });
     if (intervalId) {
       clearInterval(intervalId);
       intervalId = null;

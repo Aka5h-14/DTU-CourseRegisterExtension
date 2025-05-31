@@ -46,9 +46,11 @@ document.getElementById('fetchBtn').onclick = async function() {
 
 document.getElementById('startBtn').onclick = function() {
   const courseId = document.getElementById('courseSelect').value;
-  chrome.storage.local.set({ courseId, monitoring: true });
-  chrome.runtime.sendMessage({ action: "startMonitoring", courseId });
+  const intervalTime = parseFloat(document.getElementById('intervalInput').value) || 5;
+  chrome.storage.local.set({ courseId, monitoring: true, intervalTime, intervalCount: 0 });
+  chrome.runtime.sendMessage({ action: "startMonitoring", courseId, intervalTime });
   document.getElementById('status').textContent = "Monitoring started!";
+  document.getElementById('intervalCount').textContent = '0';
 };
 
 document.getElementById('stopBtn').onclick = function() {
@@ -56,6 +58,13 @@ document.getElementById('stopBtn').onclick = function() {
   chrome.runtime.sendMessage({ action: "stopMonitoring" });
   document.getElementById('status').textContent = "Monitoring stopped.";
 };
+
+// Listen for intervalCount changes and update the UI
+chrome.storage.onChanged.addListener(function(changes, area) {
+  if (area === 'local' && changes.intervalCount) {
+    document.getElementById('intervalCount').textContent = changes.intervalCount.newValue;
+  }
+});
 
 window.addEventListener('unload', function() {
   chrome.storage.local.set({ monitoring: false });
