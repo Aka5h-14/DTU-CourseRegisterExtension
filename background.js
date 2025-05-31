@@ -17,7 +17,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             console.log("Monitoring stopped by flag.");
             return;
           }
-          intervalCount++;
           chrome.storage.local.set({ intervalCount });
           chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
             if (!tabs || tabs.length === 0) {
@@ -31,7 +30,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 if (response && typeof response.seats === 'number') {
                   if (response.seats > 0 && response.action) {
                     // Register for the course
-                    console.log("Seats:",response.seats);
+                    // console.log("Seats:",response.seats);
                     chrome.tabs.sendMessage(
                       tabs[0].id,
                       { action: "registerCourse", actionUrl: response.action },
@@ -42,10 +41,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                           title: registerResponse && registerResponse.success ? "Course Registered!" : "Registration Failed",
                           message: registerResponse && registerResponse.success ? "Seat was available and registration attempted." : "Could not register for the course."
                         });
-                        clearInterval(intervalId);
                       }
                     );
+                    intervalCount++;
+                    clearInterval(intervalId);
                   }
+                  intervalCount++;
                 }
               }
             );

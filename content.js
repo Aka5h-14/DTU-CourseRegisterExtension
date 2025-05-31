@@ -30,10 +30,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'registerCourse' && msg.actionUrl) {
     fetch(msg.actionUrl, {
       method: 'POST',
-      credentials: 'include'
+      credentials: 'include',
+      redirect: 'manual'
     }).then(res => res.text())
-      .then(data => sendResponse({ success: true, data }))
+      .then(data => {
+        sendResponse({ success: true, data });
+        window.location.reload(); // Reload the main webpage after registration
+      })
       .catch(err => sendResponse({ success: false, error: err.toString() }));
     return true; // Keep the message channel open for async response
   }
+});
+
+chrome.tabs.sendMessage(tabId, message, (response) => {
+  if (chrome.runtime.lastError) {
+    console.error('Message failed:', chrome.runtime.lastError.message);
+    window.location.reload(); // Reload the window if the error exists
+    return;
+  }
+  // handle response
 }); 
