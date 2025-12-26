@@ -45,6 +45,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     );
                     intervalCount++;
                     clearInterval(intervalId);
+                    chrome.storage.local.set({ monitoring: false, intervalCount: 0 });
                   }
                   intervalCount++;
                 }

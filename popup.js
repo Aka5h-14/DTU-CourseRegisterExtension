@@ -1,3 +1,6 @@
+// ...existing code...
+let allOptions = []; // store fetched options globally for filtering
+
 document.getElementById('fetchBtn').onclick = async function() {
   document.getElementById('status').textContent = "Fetching courses...";
   chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
@@ -6,7 +9,7 @@ document.getElementById('fetchBtn').onclick = async function() {
     if (match) {
       const uniqueId = match[1];
       chrome.storage.local.set({ uniqueId });
-      const courseRes = await fetch(`https://reg.exam.dtu.ac.in/student/courseRegistration/${uniqueId}`, { credentials: "include" });
+      const courseRes = await fetch(`https://reg-exam.dtu.ac.in/student/courseRegistration/${uniqueId}`, { credentials: "include" });
       const html = await courseRes.text();
       // Parse courses
       const parser = new DOMParser();
@@ -30,12 +33,27 @@ document.getElementById('fetchBtn').onclick = async function() {
           }
         });
       }
+
+      // save to global and render
+      allOptions = options;
+
       const select = document.getElementById('courseSelect');
-      select.innerHTML = options.map(o =>
-        `<option value="${o.id || ''}" ${!o.available ? 'disabled' : ''}>
-          ${o.code} - ${o.name}${!o.available ? ' (Unavailable)' : ''}
-        </option>`
-      ).join('');
+
+      function renderOptions(list) {
+        if (!list.length) {
+          select.innerHTML = `<option disabled>No matches</option>`;
+          return;
+        }
+        select.innerHTML = list.map(o =>
+          `<option value="${o.id || ''}" ${!o.available ? 'disabled' : ''}>
+            ${o.code} - ${o.name}${!o.available ? ' (0 SEATS)' : ' (AVAILABLE)'}
+          </option>`
+        ).join('');
+      }
+
+      // initial render with all options
+      renderOptions(allOptions);
+
       document.getElementById('coursesSection').style.display = '';
       document.getElementById('status').textContent = "Select a course and start monitoring.";
     } else {
@@ -46,6 +64,10 @@ document.getElementById('fetchBtn').onclick = async function() {
 
 document.getElementById('startBtn').onclick = function() {
   const courseId = document.getElementById('courseSelect').value;
+  if (!courseId) {
+    document.getElementById('status').textContent = "Please select a valid available course.";
+    return;
+  }
   const intervalTime = parseFloat(document.getElementById('intervalInput').value) || 5;
   chrome.storage.local.set({ courseId, monitoring: true, intervalTime, intervalCount: 0 });
   chrome.runtime.sendMessage({ action: "startMonitoring", courseId, intervalTime });
@@ -64,6 +86,22 @@ chrome.storage.onChanged.addListener(function(changes, area) {
   if (area === 'local' && changes.intervalCount) {
     document.getElementById('intervalCount').textContent = changes.intervalCount.newValue;
   }
+});
+
+// add search/filter functionality
+document.getElementById('searchInput').addEventListener('input', function(e) {
+  const q = e.target.value.trim().toLowerCase();
+  const filtered = q ? allOptions.filter(o => o.code.toLowerCase().includes(q)) : allOptions;
+  const select = document.getElementById('courseSelect');
+  if (!filtered.length) {
+    select.innerHTML = `<option disabled>No matches</option>`;
+    return;
+  }
+  select.innerHTML = filtered.map(o =>
+    `<option value="${o.id || ''}" ${!o.available ? 'disabled' : ''}>
+      ${o.code} - ${o.name}${!o.available ? ' (0 SEATS)' : ' (AVAILABLE)'}
+    </option>`
+  ).join('');
 });
 
 window.addEventListener('unload', function() {

@@ -42,11 +42,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-chrome.tabs.sendMessage(tabId, message, (response) => {
-  if (chrome.runtime.lastError) {
-    console.error('Message failed:', chrome.runtime.lastError.message);
-    window.location.reload(); // Reload the window if the error exists
-    return;
-  }
-  // handle response
-}); 
+// chrome.tabs.sendMessage(tabId, message, (response) => {
+//   if (chrome.runtime.lastError) {
+//     console.error('Message failed:', chrome.runtime.lastError.message);
+//     window.location.reload(); // Reload the window if the error exists
+//     return;
+//   }
+//   // handle response
+// }); 
