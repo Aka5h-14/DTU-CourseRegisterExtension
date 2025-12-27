@@ -1,5 +1,72 @@
 let allOptions = []; // store fetched options globally for filtering
 
+// Console logging system
+const consoleOutput = document.getElementById('consoleOutput');
+const maxConsoleLines = 100; // Limit console output to prevent memory issues
+
+function addConsoleLog(message, type = 'log') {
+  const timestamp = new Date().toLocaleTimeString();
+  const logEntry = document.createElement('div');
+  logEntry.className = `console-${type}`;
+  logEntry.textContent = `[${timestamp}] ${message}`;
+  consoleOutput.appendChild(logEntry);
+  
+  // Keep only last maxConsoleLines entries
+  while (consoleOutput.children.length > maxConsoleLines) {
+    consoleOutput.removeChild(consoleOutput.firstChild);
+  }
+  
+  // Auto-scroll to bottom
+  consoleOutput.scrollTop = consoleOutput.scrollHeight;
+}
+
+// Override console methods in popup context
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+const originalInfo = console.info;
+
+console.log = function(...args) {
+  originalLog.apply(console, args);
+  addConsoleLog(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '), 'log');
+};
+
+console.error = function(...args) {
+  originalError.apply(console, args);
+  addConsoleLog(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '), 'error');
+};
+
+console.warn = function(...args) {
+  originalWarn.apply(console, args);
+  addConsoleLog(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '), 'warn');
+};
+
+console.info = function(...args) {
+  originalInfo.apply(console, args);
+  addConsoleLog(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '), 'info');
+};
+
+// Listen for console messages from background and content scripts
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.action === 'consoleLog') {
+    addConsoleLog(msg.message, msg.type || 'log');
+  }
+});
+
+// Clear console button
+document.getElementById('clearConsoleBtn').onclick = function() {
+  consoleOutput.innerHTML = '';
+};
+
+// Capture global errors
+window.addEventListener('error', function(event) {
+  addConsoleLog(`Error: ${event.message} at ${event.filename}:${event.lineno}`, 'error');
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+  addConsoleLog(`Unhandled Promise Rejection: ${event.reason}`, 'error');
+});
+
 document.getElementById('fetchBtn').onclick = async function() {
   document.getElementById('status').textContent = "Fetching courses...";
   chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {

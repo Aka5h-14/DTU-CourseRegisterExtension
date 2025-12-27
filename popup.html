@@ -1,28 +1,167 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <title>DTU Course Auto-Register</title>
   <style>
-    body { font-family: Arial, sans-serif; width: 350px; max-height: 600px; overflow-y: auto; }
-    label, input, select, button { display: block; margin: 8px 0; width: 100%; }
-    #intervalCount { font-weight: bold; color: #007bff; }
-    #notice { color: #b00; font-size: 15px; margin-top: 8px; }
-    #intervalCountDiv { font-weight: bold; font-size: 15px; color: #007bff; }
-    #courseList { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin: 8px 0; }
-    .course-item { margin: 2px 0; padding: 1px; }
-    .course-item label { display: flex; align-items: center; margin: 0; cursor: pointer; }
-    .course-item input[type="checkbox"] { width: auto; margin-right: 8px; }
-    #selectAllDeselectAll { display: flex; justify-content: space-between; margin: 8px 0; }
-    #selectAllBtn, #deselectAllBtn { display: inline-block; width: 48%; margin: 4px 1%; }
-    #monitoringStatus { margin-top: 8px; padding: 8px; background: #f0f0f0; border-radius: 4px; }
-    .registered-course { color: #28a745; font-weight: bold; }
-    .monitoring-course { color: #007bff; font-weight: bold; }
-    #registeredSection { margin-top: 16px; padding: 8px; border-top: 2px solid #28a745; }
-    #registeredCoursesList { max-height: 200px; overflow-y: auto; }
-    .registered-course-item { padding: 6px; margin: 4px 0; background: #d4edda; border-left: 3px solid #28a745; border-radius: 3px; }
-    .registered-course-item span { color: #155724; font-weight: 500; }
+    body {
+      font-family: Arial, sans-serif;
+      width: 350px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    label,
+    input,
+    select,
+    button {
+      display: block;
+      margin: 8px 0;
+      width: 100%;
+    }
+
+    #intervalCount {
+      font-weight: bold;
+      color: #007bff;
+    }
+
+    #notice {
+      color: #b00;
+      font-size: 15px;
+      margin-top: 4px;
+      margin-bottom: 4px;
+    }
+
+    #intervalCountDiv {
+      font-weight: bold;
+      font-size: 15px;
+      color: #007bff;
+    }
+
+    #courseList {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 8px;
+      margin: 8px 0;
+    }
+
+    .course-item {
+      margin: 2px 0;
+      padding: 1px;
+    }
+
+    .course-item label {
+      display: flex;
+      align-items: center;
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .course-item input[type="checkbox"] {
+      width: auto;
+      margin-right: 8px;
+    }
+
+    #buttonGroup {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+    }
+
+    #selectAllBtn,
+    #deselectAllBtn {
+      display: inline-block;
+      width: 48%;
+      margin: 4px 1%;
+    }
+
+    #monitoringStatus {
+      margin-top: 8px;
+      padding: 8px;
+      background: #f0f0f0;
+      border-radius: 4px;
+    }
+
+    .registered-course {
+      color: #28a745;
+      font-weight: bold;
+    }
+
+    .monitoring-course {
+      color: #007bff;
+      font-weight: bold;
+    }
+
+    #registeredSection {
+      margin-top: 16px;
+      padding: 8px;
+      border-top: 2px solid #28a745;
+    }
+
+    #registeredCoursesList {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .registered-course-item {
+      padding: 6px;
+      margin: 4px 0;
+      background: #d4edda;
+      border-left: 3px solid #28a745;
+      border-radius: 3px;
+    }
+
+    .registered-course-item span {
+      color: #155724;
+      font-weight: 500;
+    }
+
+    #consoleSection {
+      margin-top: 16px;
+      padding: 8px;
+      border-top: 2px solid #ccc;
+    }
+
+    #consoleOutput {
+      max-height: 200px;
+      overflow-y: auto;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      border-radius: 4px;
+    }
+
+    .console-log {
+      color: #d4d4d4;
+      margin: 2px 0;
+    }
+
+    .console-error {
+      color: #f48771;
+      margin: 2px 0;
+    }
+
+    .console-warn {
+      color: #cca700;
+      margin: 2px 0;
+    }
+
+    .console-info {
+      color: #4ec9b0;
+      margin: 2px 0;
+    }
+
+    #clearConsoleBtn {
+      margin-top: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+    }
   </style>
 </head>
+
 <body>
   <button id="fetchBtn">Fetch Courses</button>
   <div id="coursesSection" style="display:none;">
@@ -30,26 +169,36 @@
 
     <!-- added search input -->
     <input id="searchInput" type="search" placeholder="Search by code (e.g. CS101)" />
-    
-    <div id="selectAllDeselectAll">
+
+    <div id="buttonGroup">
       <button id="selectAllBtn">Select All</button>
       <button id="deselectAllBtn">Deselect All</button>
     </div>
 
     <div id="courseList"></div>
-    
+
     <label>Interval (seconds): <input id="intervalInput" type="number" min="1.5" step="0.1" value="2"></label>
-    <button id="startBtn">Start Monitoring</button>
-    <button id="stopBtn">Stop Monitoring</button>
-    <div id="status"></div>
-    <div id="intervalCountDiv">Interval runs: <span id="intervalCount">0</span></div>
-    <div id="monitoringStatus"></div>
+    <div id="buttonGroup">
+      <button id="startBtn">Start Monitoring</button>
+      <button id="stopBtn">Stop Monitoring</button>
+    </div>
+
+  </div>
+  <div id="notice">Please use the Stop Monitoring button before closing this popup.</div>
+
+  <div id="status"></div>
+  <div id="intervalCountDiv">Interval runs: <span id="intervalCount">0</span></div>
+  <div id="monitoringStatus"></div>
   </div>
   <div id="registeredSection" style="display:none;">
     <h3>Registered Courses</h3>
     <div id="registeredCoursesList"></div>
   </div>
-  <div id="notice">Please use the Stop Monitoring button before closing this popup.</div>
-  <script src="popup.js"></script>
+  <div id="consoleSection">
+    <h3>Console Output</h3>
+    <button id="clearConsoleBtn">Clear Console</button>
+    <div id="consoleOutput"></div>
+    <script src="popup.js"></script>
 </body>
+
 </html>

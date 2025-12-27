@@ -1,3 +1,53 @@
+// Helper function to send console messages to popup via background
+function sendConsoleToPopup(message, type = 'log') {
+  chrome.runtime.sendMessage({
+    action: 'consoleLog',
+    message: message,
+    type: type
+  }).catch(() => {
+    // Background might not be listening, ignore errors
+  });
+}
+
+// Override console methods to also send to popup
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+const originalInfo = console.info;
+
+console.log = function(...args) {
+  originalLog.apply(console, args);
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  sendConsoleToPopup(message, 'log');
+};
+
+console.error = function(...args) {
+  originalError.apply(console, args);
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  sendConsoleToPopup(message, 'error');
+};
+
+console.warn = function(...args) {
+  originalWarn.apply(console, args);
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  sendConsoleToPopup(message, 'warn');
+};
+
+console.info = function(...args) {
+  originalInfo.apply(console, args);
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  sendConsoleToPopup(message, 'info');
+};
+
+// Capture unhandled errors
+window.addEventListener('error', function(event) {
+  sendConsoleToPopup(`Error: ${event.message} at ${event.filename}:${event.lineno}`, 'error');
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+  sendConsoleToPopup(`Unhandled Promise Rejection: ${event.reason}`, 'error');
+});
+
 async function checkSeats(courseId) {
   // Get stored ETag from previous request
   const storage = await chrome.storage.local.get(['etag']);
@@ -68,7 +118,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }).then(res => res.text())
       .then(data => {
         sendResponse({ success: true, data });
-        window.location.reload(); // Reload the main webpage after registration
+        setTimeout(() => {
+          window.location.reload(); // Reload the main webpage after registration
+        }, 800); // 800ms delay before reload
       })
       .catch(err => {
         console.error("Error registering course:", err);

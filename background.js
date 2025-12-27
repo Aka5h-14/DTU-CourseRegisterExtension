@@ -2,6 +2,56 @@ let intervalId = null;
 let intervalCount = 0;
 let isRegistering = false; // Flag to prevent race conditions
 
+// Helper function to send console messages to popup
+function sendConsoleToPopup(message, type = 'log') {
+  chrome.runtime.sendMessage({
+    action: 'consoleLog',
+    message: message,
+    type: type
+  }).catch(() => {
+    // Popup might not be open, ignore errors
+  });
+}
+
+// Override console methods to also send to popup
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+const originalInfo = console.info;
+
+console.log = function(...args) {
+  originalLog.apply(console, args);
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  sendConsoleToPopup(message, 'log');
+};
+
+console.error = function(...args) {
+  originalError.apply(console, args);
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  sendConsoleToPopup(message, 'error');
+};
+
+console.warn = function(...args) {
+  originalWarn.apply(console, args);
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  sendConsoleToPopup(message, 'warn');
+};
+
+console.info = function(...args) {
+  originalInfo.apply(console, args);
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  sendConsoleToPopup(message, 'info');
+};
+
+// Capture unhandled errors
+self.addEventListener('error', function(event) {
+  sendConsoleToPopup(`Error: ${event.message}`, 'error');
+});
+
+self.addEventListener('unhandledrejection', function(event) {
+  sendConsoleToPopup(`Unhandled Promise Rejection: ${event.reason}`, 'error');
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "startMonitoring") {
     if (intervalId) clearInterval(intervalId);
@@ -138,9 +188,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                           }
                           
                           // Add to registered courses
-                          chrome.storage.local.get(['registeredCourses', 'courseIds'], function(regResult) {
+                          chrome.storage.local.get(['registeredCourses', 'courseIds', 'courseDetailsMap'], function(regResult) {
                             const registered = regResult.registeredCourses || [];
                             const allCourseIds = regResult.courseIds || [];
+                            const courseDetailsMap = regResult.courseDetailsMap || {};
+                            
+                            // Get course code/name for notification
+                            const courseDetails = courseDetailsMap[courseId];
+                            const courseDisplayName = courseDetails 
+                              ? `${courseDetails.code} - ${courseDetails.name}` 
+                              : `Course ${courseId}`;
                             
                             if (!registered.includes(courseId)) {
                               registered.push(courseId);
@@ -159,8 +216,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                               iconUrl: "icon.png",
                               title: registerResponse && registerResponse.success ? "Course Registered!" : "Registration Failed",
                               message: registerResponse && registerResponse.success 
-                                ? `Course ${courseId} registered! Continuing with remaining courses...` 
-                                : `Could not register for course ${courseId}.`
+                                ? `${courseDisplayName} registered! Continuing with remaining courses...` 
+                                : `Could not register for ${courseDisplayName}.`
                             });
                           });
                           
@@ -192,5 +249,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       intervalId = null;
       console.log("Monitoring stopped by user or popup close.");
     }
+  }
+  // Forward console messages from content scripts to popup
+  if (msg.action === "consoleLog") {
+    sendConsoleToPopup(msg.message, msg.type || 'log');
   }
 });
