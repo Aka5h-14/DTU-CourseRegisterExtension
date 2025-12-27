@@ -1,4 +1,3 @@
-// ...existing code...
 let allOptions = []; // store fetched options globally for filtering
 
 document.getElementById('fetchBtn').onclick = async function() {
@@ -27,6 +26,7 @@ document.getElementById('fetchBtn').onclick = async function() {
             options.push({
               code: tds[1].textContent.trim(),
               name: tds[0].textContent.trim(),
+              slot: tds[3].textContent.trim(),
               id: action ? action.split("/").pop() : null,
               available: !!action // true if form/action exists, false otherwise
             });
@@ -36,43 +36,102 @@ document.getElementById('fetchBtn').onclick = async function() {
 
       // save to global and render
       allOptions = options;
+      renderCourseList(allOptions);
 
-      const select = document.getElementById('courseSelect');
-
-      function renderOptions(list) {
-        if (!list.length) {
-          select.innerHTML = `<option disabled>No matches</option>`;
-          return;
+      // Preserve course details for already registered courses
+      chrome.storage.local.get(['registeredCourses', 'courseDetailsMap'], function(storageResult) {
+        const registered = storageResult.registeredCourses || [];
+        const existingDetailsMap = storageResult.courseDetailsMap || {};
+        const updatedDetailsMap = { ...existingDetailsMap };
+        
+        // Update course details for registered courses if they're in the new options
+        registered.forEach(courseId => {
+          const course = options.find(o => o.id === courseId);
+          if (course && !updatedDetailsMap[courseId]) {
+            updatedDetailsMap[courseId] = {
+              code: course.code,
+              name: course.name,
+              slot: course.slot,
+              id: course.id
+            };
+          }
+        });
+        
+        if (Object.keys(updatedDetailsMap).length > 0) {
+          chrome.storage.local.set({ courseDetailsMap: updatedDetailsMap });
         }
-        select.innerHTML = list.map(o =>
-          `<option value="${o.id || ''}" ${!o.available ? 'disabled' : ''}>
-            ${o.code} - ${o.name}${!o.available ? ' (0 SEATS)' : ' (AVAILABLE)'}
-          </option>`
-        ).join('');
-      }
-
-      // initial render with all options
-      renderOptions(allOptions);
+      });
 
       document.getElementById('coursesSection').style.display = '';
-      document.getElementById('status').textContent = "Select a course and start monitoring.";
+      document.getElementById('status').textContent = "Select courses and start monitoring.";
+      
+      // Update registered courses display
+      updateRegisteredCourses();
     } else {
       document.getElementById('status').textContent = "Please open the course registration page in your browser.";
     }
   });
 };
 
-document.getElementById('startBtn').onclick = function() {
-  const courseId = document.getElementById('courseSelect').value;
-  if (!courseId) {
-    document.getElementById('status').textContent = "Please select a valid available course.";
+function renderCourseList(list) {
+  const courseList = document.getElementById('courseList');
+  if (!list.length) {
+    courseList.innerHTML = `<div>No courses found</div>`;
     return;
   }
-  const intervalTime = parseFloat(document.getElementById('intervalInput').value) || 5;
-  chrome.storage.local.set({ courseId, monitoring: true, intervalTime, intervalCount: 0 });
-  chrome.runtime.sendMessage({ action: "startMonitoring", courseId, intervalTime });
-  document.getElementById('status').textContent = "Monitoring started!";
-  document.getElementById('intervalCount').textContent = '0';
+  courseList.innerHTML = list.map(o => {
+    const checkboxId = `course-${o.id}`;
+    return `
+      <div class="course-item">
+        <label>
+          <input type="checkbox" id="${checkboxId}" value="${o.id || ''}" ${!o.available ? 'disabled' : ''}>
+          <span>${o.code} - ${o.name} - ${o.slot}</span>
+        </label>
+      </div>
+    `;
+  }).join('');
+}
+
+document.getElementById('startBtn').onclick = function() {
+  const checkboxes = document.querySelectorAll('#courseList input[type="checkbox"]:checked:not(:disabled)');
+  const courseIds = Array.from(checkboxes).map(cb => cb.value).filter(id => id);
+  
+  if (courseIds.length === 0) {
+    document.getElementById('status').textContent = "Please select at least one available course.";
+    return;
+  }
+  
+  // Clear all previous data to start fresh
+  chrome.storage.local.remove(['registeredCourses', 'courseDetailsMap', 'courseIds', 'intervalCount', 'etag'], function() {
+    // Store course details mapping for later reference
+    const courseDetailsMap = {};
+    courseIds.forEach(courseId => {
+      const course = allOptions.find(o => o.id === courseId);
+      if (course) {
+        courseDetailsMap[courseId] = {
+          code: course.code,
+          name: course.name,
+          slot: course.slot,
+          id: course.id
+        };
+      }
+    });
+    
+    const intervalTime = parseFloat(document.getElementById('intervalInput').value) || 5;
+    chrome.storage.local.set({ 
+      courseIds: courseIds, 
+      monitoring: true, 
+      intervalTime, 
+      intervalCount: 0,
+      registeredCourses: [], // Track registered courses
+      courseDetailsMap: courseDetailsMap // Store course details for display
+    });
+    chrome.runtime.sendMessage({ action: "startMonitoring", courseIds, intervalTime });
+    document.getElementById('status').textContent = `Monitoring ${courseIds.length} course(s)!`;
+    document.getElementById('intervalCount').textContent = '0';
+    updateMonitoringStatus();
+    updateRegisteredCourses();
+  });
 };
 
 document.getElementById('stopBtn').onclick = function() {
@@ -81,28 +140,111 @@ document.getElementById('stopBtn').onclick = function() {
   document.getElementById('status').textContent = "Monitoring stopped.";
 };
 
-// Listen for intervalCount changes and update the UI
+// Listen for storage changes and update the UI
 chrome.storage.onChanged.addListener(function(changes, area) {
-  if (area === 'local' && changes.intervalCount) {
-    document.getElementById('intervalCount').textContent = changes.intervalCount.newValue;
+  if (area === 'local') {
+    if (changes.intervalCount) {
+      document.getElementById('intervalCount').textContent = changes.intervalCount.newValue;
+    }
+    if (changes.registeredCourses || changes.courseIds) {
+      updateMonitoringStatus();
+      updateRegisteredCourses();
+    }
   }
 });
+
+// Clear previous data when popup opens if not actively monitoring
+chrome.storage.local.get(['monitoring'], function(result) {
+  if (!result.monitoring) {
+    // Not monitoring, clear all previous data for fresh start
+    chrome.storage.local.remove(['registeredCourses', 'courseDetailsMap', 'courseIds', 'intervalCount', 'etag'], function() {
+      document.getElementById('registeredSection').style.display = 'none';
+    });
+  } else {
+    // Actively monitoring, show current status
+    updateMonitoringStatus();
+    updateRegisteredCourses();
+  }
+});
+
+// Select All / Deselect All buttons
+document.getElementById('selectAllBtn').onclick = function() {
+  document.querySelectorAll('#courseList input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true);
+};
+
+document.getElementById('deselectAllBtn').onclick = function() {
+  document.querySelectorAll('#courseList input[type="checkbox"]').forEach(cb => cb.checked = false);
+};
 
 // add search/filter functionality
 document.getElementById('searchInput').addEventListener('input', function(e) {
   const q = e.target.value.trim().toLowerCase();
   const filtered = q ? allOptions.filter(o => o.code.toLowerCase().includes(q)) : allOptions;
-  const select = document.getElementById('courseSelect');
-  if (!filtered.length) {
-    select.innerHTML = `<option disabled>No matches</option>`;
-    return;
-  }
-  select.innerHTML = filtered.map(o =>
-    `<option value="${o.id || ''}" ${!o.available ? 'disabled' : ''}>
-      ${o.code} - ${o.name}${!o.available ? ' (0 SEATS)' : ' (AVAILABLE)'}
-    </option>`
-  ).join('');
+  renderCourseList(filtered);
 });
+
+function updateMonitoringStatus() {
+  chrome.storage.local.get(['courseIds', 'registeredCourses'], function(result) {
+    const statusDiv = document.getElementById('monitoringStatus');
+    if (!result.courseIds || result.courseIds.length === 0) {
+      statusDiv.innerHTML = '';
+      return;
+    }
+    
+    let html = '<strong>Monitoring Status:</strong><br>';
+    const registered = result.registeredCourses || [];
+    
+    result.courseIds.forEach(courseId => {
+      const course = allOptions.find(o => o.id === courseId);
+      if (course) {
+        if (registered.includes(courseId)) {
+          html += `<span class="registered-course"> ${course.code} - Registered</span><br>`;
+        } else {
+          html += `<span class="monitoring-course"> ${course.code} - Checking...</span><br>`;
+        }
+      }
+    });
+    
+    statusDiv.innerHTML = html;
+  });
+}
+
+function updateRegisteredCourses() {
+  chrome.storage.local.get(['registeredCourses', 'courseDetailsMap'], function(result) {
+    const registeredSection = document.getElementById('registeredSection');
+    const registeredList = document.getElementById('registeredCoursesList');
+    const registered = result.registeredCourses || [];
+    const courseDetailsMap = result.courseDetailsMap || {};
+    
+    if (registered.length === 0) {
+      registeredSection.style.display = 'none';
+      return;
+    }
+    
+    registeredSection.style.display = 'block';
+    
+    let html = '';
+    registered.forEach(courseId => {
+      const courseDetails = courseDetailsMap[courseId];
+      if (courseDetails) {
+        html += `
+          <div class="registered-course-item">
+            <span>${courseDetails.code} - ${courseDetails.name} - ${courseDetails.slot}</span>
+          </div>
+        `;
+      } else {
+        // Fallback if course details not found
+        html += `
+          <div class="registered-course-item">
+            <span>✓ Course ID: ${courseId}</span>
+          </div>
+        `;
+      }
+    });
+    
+    registeredList.innerHTML = html;
+  });
+}
 
 window.addEventListener('unload', function() {
   chrome.storage.local.set({ monitoring: false });
