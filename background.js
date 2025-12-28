@@ -148,93 +148,94 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               });
             }
             
-            // Check all courses in parallel
+            // Check all courses in a single request
             ensureContentScript(() => {
-              let completedChecks = 0;
-              let foundAvailable = false;
+              // Skip if already registering
+              if (isRegistering) {
+                intervalCount++;
+                return;
+              }
               
-              remainingCourses.forEach(courseId => {
-                chrome.tabs.sendMessage(
-                  tab.id,
-                  { action: "checkSeats", courseId: courseId },
-                  function(response) {
-                    completedChecks++;
-                    
-                    // If we already registered for another course, skip
-                    if (foundAvailable || isRegistering) {
-                      if (completedChecks === remainingCourses.length) {
-                        intervalCount++;
-                      }
-                      return;
-                    }
-                    
-                    if (response && typeof response.seats === 'number' && response.seats > 0 && response.action) {
-                      // Found available seat - register immediately
-                      foundAvailable = true;
-                      isRegistering = true;
-                      
-                      chrome.tabs.sendMessage(
-                        tab.id,
-                        { action: "registerCourse", actionUrl: response.action },
-                        function(registerResponse) {
-                          isRegistering = false;
-                          
-                          if (chrome.runtime.lastError) {
-                            console.error("Error sending registration message:", chrome.runtime.lastError.message);
-                            if (completedChecks === remainingCourses.length) {
-                              intervalCount++;
-                            }
-                            return;
-                          }
-                          
-                          // Add to registered courses
-                          chrome.storage.local.get(['registeredCourses', 'courseIds', 'courseDetailsMap'], function(regResult) {
-                            const registered = regResult.registeredCourses || [];
-                            const allCourseIds = regResult.courseIds || [];
-                            const courseDetailsMap = regResult.courseDetailsMap || {};
-                            
-                            // Get course code/name for notification
-                            const courseDetails = courseDetailsMap[courseId];
-                            const courseDisplayName = courseDetails 
-                              ? `${courseDetails.code} - ${courseDetails.name}` 
-                              : `Course ${courseId}`;
-                            
-                            if (!registered.includes(courseId)) {
-                              registered.push(courseId);
-                              chrome.storage.local.set({ registeredCourses: registered });
-                            }
-                            
-                            // Remove from courseIds list
-                            const updatedCourseIds = allCourseIds.filter(id => id !== courseId);
-                            chrome.storage.local.set({ courseIds: updatedCourseIds });
-                            
-                            // Reset etag for next check cycle
-                            chrome.storage.local.set({ etag: null });
-                            
-                            chrome.notifications.create({
-                              type: "basic",
-                              iconUrl: "icon.png",
-                              title: registerResponse && registerResponse.success ? "Course Registered!" : "Registration Failed",
-                              message: registerResponse && registerResponse.success 
-                                ? `${courseDisplayName} registered! Continuing with remaining courses...` 
-                                : `Could not register for ${courseDisplayName}.`
-                            });
-                          });
-                          
-                          if (completedChecks === remainingCourses.length) {
-                            intervalCount++;
-                          }
-                        }
-                      );
-                    } else {
-                      // No seats available for this course
-                      if (completedChecks === remainingCourses.length) {
-                        intervalCount++;
-                      }
-                    }
+              chrome.tabs.sendMessage(
+                tab.id,
+                { action: "checkAllSeats", courseIds: remainingCourses },
+                function(response) {
+                  if (chrome.runtime.lastError) {
+                    console.error("Error checking seats:", chrome.runtime.lastError.message);
+                    intervalCount++;
+                    return;
                   }
-                );
-              });
+                  
+                  // If content unchanged (304), skip
+                  if (response && response.unchanged) {
+                    intervalCount++;
+                    return;
+                  }
+                  
+                  // Check if any courses have available seats
+                  const availableCourses = response && response.courses ? response.courses : [];
+                  
+                  if (availableCourses.length > 0 && !isRegistering) {
+                    // Register for the first available course
+                    isRegistering = true;
+                    const firstAvailable = availableCourses[0];
+                    const courseId = firstAvailable.courseId;
+                    
+                    chrome.tabs.sendMessage(
+                      tab.id,
+                      { action: "registerCourse", actionUrl: firstAvailable.action },
+                      function(registerResponse) {
+                        isRegistering = false;
+                        
+                        if (chrome.runtime.lastError) {
+                          console.error("Error sending registration message:", chrome.runtime.lastError.message);
+                          intervalCount++;
+                          return;
+                        }
+                        
+                        // Add to registered courses
+                        chrome.storage.local.get(['registeredCourses', 'courseIds', 'courseDetailsMap'], function(regResult) {
+                          const registered = regResult.registeredCourses || [];
+                          const allCourseIds = regResult.courseIds || [];
+                          const courseDetailsMap = regResult.courseDetailsMap || {};
+                          
+                          // Get course code/name for notification
+                          const courseDetails = courseDetailsMap[courseId];
+                          const courseDisplayName = courseDetails 
+                            ? `${courseDetails.code} - ${courseDetails.name}` 
+                            : `Course ${courseId}`;
+                          
+                          if (!registered.includes(courseId)) {
+                            registered.push(courseId);
+                            chrome.storage.local.set({ registeredCourses: registered });
+                          }
+                          
+                          // Remove from courseIds list
+                          const updatedCourseIds = allCourseIds.filter(id => id !== courseId);
+                          chrome.storage.local.set({ courseIds: updatedCourseIds });
+                          
+                          // Reset etag for next check cycle
+                          chrome.storage.local.set({ etag: null });
+                          
+                          chrome.notifications.create({
+                            type: "basic",
+                            iconUrl: "icon.png",
+                            title: registerResponse && registerResponse.success ? "Course Registered!" : "Registration Failed",
+                            message: registerResponse && registerResponse.success 
+                              ? `${courseDisplayName} registered! Continuing with remaining courses...` 
+                              : `Could not register for ${courseDisplayName}.`
+                          });
+                        });
+                        
+                        intervalCount++;
+                      }
+                    );
+                  } else {
+                    // No seats available for any course
+                    intervalCount++;
+                  }
+                }
+              );
             });
           });
         });
